@@ -42,7 +42,6 @@ Exchange.ccxtVersion = version
 //-----------------------------------------------------------------------------
 
 const exchanges = {
-    '_1btcxe':                 require ('./js/_1btcxe.js'),
     'acx':                     require ('./js/acx.js'),
     'adara':                   require ('./js/adara.js'),
     'allcoin':                 require ('./js/allcoin.js'),
@@ -140,6 +139,7 @@ const exchanges = {
     'mandala':                 require ('./js/mandala.js'),
     'mercado':                 require ('./js/mercado.js'),
     'mixcoins':                require ('./js/mixcoins.js'),
+    'mxc':                     require ('./js/mxc.js'),
     'oceanex':                 require ('./js/oceanex.js'),
     'okcoincny':               require ('./js/okcoincny.js'),
     'okcoinusd':               require ('./js/okcoinusd.js'),
@@ -165,7 +165,8 @@ const exchanges = {
     'xbtce':                   require ('./js/xbtce.js'),
     'yobit':                   require ('./js/yobit.js'),
     'zaif':                    require ('./js/zaif.js'),
-    'zb':                      require ('./js/zb.js'),    
+    'zb':                      require ('./js/zb.js'),
+    '_1btcxe':                 require ('./js/_1btcxe.js'),    
 }
 
 //-----------------------------------------------------------------------------
