@@ -6,7 +6,6 @@
 from ccxt.base.exchange import Exchange
 import math
 from ccxt.base.errors import ExchangeError
-from ccxt.base.errors import ArgumentsRequired
 
 
 class mxc(Exchange):
@@ -16,50 +15,49 @@ class mxc(Exchange):
             'id': 'mxc',
             'name': 'MXC',
             'countries': ['CN'],
-            'version': 'v1',
+            'version': 'v2',
             'rateLimit': 1000,
+            'hostname': 'www.mxc.com',
             'has': {
                 'CORS': False,
                 'createMarketOrder': False,
-                'fetchTickers': True,
+                'fetchTickers': False,
                 'withdraw': False,
                 'fetchDeposits': False,
                 'fetchWithdrawals': False,
                 'fetchTransactions': False,
                 'createDepositAddress': False,
                 'fetchDepositAddress': False,
-                'fetchClosedOrders': False,
+                'fetchClosedOrders': True,
                 'fetchOHLCV': True,
-                'fetchOpenOrders': False,
+                'fetchOpenOrders': True,
                 'fetchOrderTrades': False,
                 'fetchOrders': True,
                 'fetchOrder': True,
-                'fetchMyTrades': False,
+                'fetchMyTrades': True,
             },
             'timeframes': {
-                '1m': '60',
-                '5m': '300',
-                '15m': '900',
-                '30m': '1800',
-                '60m': '3600',
-                '1h': '3600',
-                '2h': '7200',
-                '4h': '14400',
-                '6h': '21600',
-                '12h': '43200',
-                '1d': '86400',
-                '1w': '604800',
+                '1m': '1m',
+                '5m': '5m',
+                '15m': '15m',
+                '30m': '30m',
+                '60m': '60m',
+                '1h': '1h',
+                # '2h': '2h',
+                # '4h': '4h',
+                # '6h': '6h',
+                # '12h': '12h',
+                '1d': '1d',
+                # '1w': '1w',
+                '1M': '1M',
             },
             'urls': {
                 'logo': '',
-                'api': {
-                    'public': 'https://www.mxc.io/open/api/v2/',
-                    'private': 'https://www.mxc.io/open/api/v2/',
-                },
-                'www': 'https://mxc.ceo/',
-                'doc': 'https://github.com/mxcdevelop/APIDoc',
+                'api': 'https://{hostname}',
+                'www': 'https://mxc.com/',
+                'doc': 'https://mxcdevelop.github.io/APIDoc/',
                 'fees': [
-                    'https://www.mxc.ceo/info/fee',
+                    'https://www.mxc.com/info/fee',
                 ],
                 'referral': '',
             },
@@ -67,26 +65,25 @@ class mxc(Exchange):
                 'public': {
                     'get': [
                         'market/symbols',
-                        'depth',
-                        'history',
-                        'ticker',
-                        'kline',
+                        'market/depth',
+                        'market/kline',
+                        'market/ticker',
+                        'market/deals',
                     ],
                 },
                 'private': {
                     'get': [
                         'account/info',
                         'current/orders',
-                        'orders',
-                        'order',
+                        'order/list',
+                        'order/query',
+                        'order/deals',
                     ],
                     'post': [
-                        'order',
-                        'order_batch',
-                        'order_cancel',
+                        'order/place',
                     ],
                     'delete': [
-                        'order',
+                        'order/cancel',
                     ],
                 },
             },
@@ -182,60 +179,55 @@ class mxc(Exchange):
 
     def fetch_balance(self, params={}):
         self.load_markets()
-        request = {
-            'api_key': self.apiKey,
-            'req_time': self.milliseconds(),
-        }
-        response = self.privateGetAccountInfo(self.extend(request, params))
-        result = {'info': response}
-        currencyIds = list(response.keys())
+        response = self.privateGetAccountInfo(params)
+        balances = self.safe_value(response, 'data')
+        result = {'info': balances}
+        currencyIds = list(balances.keys())
         for i in range(0, len(currencyIds)):
             currencyId = currencyIds[i]
             code = self.safe_currency_code(currencyId)
             account = self.account()
-            account['free'] = self.safe_float(response[currencyId], 'available')
-            account['used'] = self.safe_float(response[currencyId], 'frozen')
+            if code in balances:
+                account['free'] = self.safe_float(balances[currencyId], 'available')
+                account['used'] = self.safe_float(balances[currencyId], 'frozen')
             result[code] = account
         return self.parse_balance(result)
 
     def fetch_order_book(self, symbol, limit=None, params={}):
         self.load_markets()
         request = {
-            'depth': 5,
-            'market': self.market_id(symbol),
+            'depth': limit or 5,
+            'symbol': self.market_id(symbol),
         }
-        response = self.publicGetDepth(self.extend(request, params))
-        orderbook = self.safe_value(response, 'data')
-        return self.parse_order_book(orderbook, None, 'bids', 'asks', 'price', 'quantity')
+        response = self.publicGetMarketDepth(self.extend(request, params))
+        orderBook = self.safe_value(response, 'data')
+        return self.parse_order_book(orderBook, None, 'bids', 'asks', 'price', 'quantity')
 
     def parse_ohlcv(self, ohlcv, market=None, timeframe='1m', since=None, limit=None):
         # they return [Timestamp, Volume, Close, High, Low, Open]
         return [
-            int(ohlcv[0]),   # t
+            int(ohlcv[0] * 1000),   # t
             float(ohlcv[1]),  # o
-            float(ohlcv[2]),  # c
             float(ohlcv[3]),  # h
             float(ohlcv[4]),  # l
+            float(ohlcv[2]),  # c
             float(ohlcv[5]),  # v
         ]
 
     def fetch_ohlcv(self, symbol, timeframe='1m', since=None, limit=None, params={}):
         self.load_markets()
         market = self.market(symbol)
-        now = self.milliseconds()
         request = {
-            'market': self.market_id(symbol),
+            'symbol': self.market_id(symbol),
             'interval': self.timeframes[timeframe],
-            'startTime': now / 1000,
+            'start_time': self.seconds(),
         }
-        # max limit = 1001
+        # max limit = 1000
         if limit is not None:
-            periodDurationInSeconds = self.parse_timeframe(timeframe)
-            hours = int((periodDurationInSeconds * limit) / 3600)
-            request['range_hour'] = max(0, hours - 1)
+            request['limit'] = limit
         if since is not None:
-            request['startTime'] = int(since / 1000)
-        response = self.publicGetKline(self.extend(request, params))
+            request['start_time'] = int(since / 1000)
+        response = self.publicGetMarketKline(self.extend(request, params))
         #        ordering: Ts, O, C, H, L, V
         #     {
         #         "code": 200,
@@ -248,27 +240,30 @@ class mxc(Exchange):
         return self.parse_ohlcvs(data, market, timeframe, since, limit)
 
     def parse_ticker(self, ticker, market=None):
-        timestamp = self.milliseconds()
         symbol = None
         if market:
             symbol = market['symbol']
-        last = self.safe_float(ticker, 'last')
-        percentage = self.safe_float(ticker, 'percentChange')
+        timestamp = self.safe_integer(ticker, 'time')
         open = self.safe_float(ticker, 'open')
+        last = self.safe_float(ticker, 'last')
         change = None
         average = None
-        if (last is not None) and (percentage is not None):
+        percentage = None
+        if (open is not None) and (last is not None):
             change = last - open
-            average = self.sum(last, open) / 2
+            average = self.sum(open, last) / 2
+            if (last is not None) and (last > 0):
+                percentage = (change / open) * 100
         return {
             'symbol': symbol,
+            'info': ticker,
             'timestamp': timestamp,
             'datetime': self.iso8601(timestamp),
             'high': self.safe_float(ticker, 'high'),
             'low': self.safe_float(ticker, 'low'),
-            'bid': self.safe_float(ticker, 'buy'),
+            'bid': self.safe_float(ticker, 'bid'),
             'bidVolume': None,
-            'ask': self.safe_float(ticker, 'sell'),
+            'ask': self.safe_float(ticker, 'ask'),
             'askVolume': None,
             'vwap': None,
             'open': open,
@@ -280,159 +275,157 @@ class mxc(Exchange):
             'average': average,
             'baseVolume': self.safe_float(ticker, 'volume'),  # gateio has them reversed
             'quoteVolume': None,
-            'info': ticker,
         }
 
     def fetch_tickers(self, symbols=None, params={}):
-        self.load_markets()
-        response = self.publicGetTicker(params)
-        result = {}
-        data = self.safe_value(response, 'data', [])
-        ids = list(data.keys())
-        for i in range(0, len(ids)):
-            id = ids[i]
-            baseId, quoteId = id.split('_')
-            base = baseId.upper()
-            quote = quoteId.upper()
-            base = self.safe_currency_code(base)
-            quote = self.safe_currency_code(quote)
-            symbol = base + '/' + quote
-            market = None
-            if symbol in self.markets:
-                market = self.markets[symbol]
-            if id in self.markets_by_id:
-                market = self.markets_by_id[id]
-            result[symbol] = self.parse_ticker(data[id], market)
-        return result
+    #     self.load_markets()
+    #     response = self.publicGetMarketTicker(params)
+    #     result = {}
+    #     data = self.safe_value(response, 'data', [])
+    #     ids = list(data.keys())
+    #     for i in range(0, len(ids)):
+    #         id = ids[i]
+    #         baseId, quoteId = id.split('_')
+    #         base = baseId.upper()
+    #         quote = quoteId.upper()
+    #         base = self.safe_currency_code(base)
+    #         quote = self.safe_currency_code(quote)
+    #         symbol = base + '/' + quote
+    #         market = None
+    #         if symbol in self.markets:
+    #             market = self.markets[symbol]
+    #         }
+    #         if id in self.markets_by_id:
+    #             market = self.markets_by_id[id]
+    #         }
+    #         result[symbol] = self.parse_ticker(data[id], market)
+    #     }
+    #     return result
 
     def fetch_ticker(self, symbol, params={}):
         self.load_markets()
         market = self.market(symbol)
-        ticker = self.publicGetTicker(self.extend({
-            'market': self.market_id(symbol),
-        }, params))
+        request = {
+            'symbol': self.market_id(symbol),
+        }
+        response = self.publicGetMarketTicker(self.extend(request, params))
+        ticker = self.safe_value(response, 'data', [])[0]
         return self.parse_ticker(ticker, market)
 
     def parse_trade(self, trade, market=None):
-        dateStr = self.safe_value(trade, 'tradeTime')
-        timestamp = None
-        if dateStr is not None:
-            timestamp = self.parse_date(dateStr + '  GMT+8')
-        # take either of orderid or orderId
-        price = self.safe_float(trade, 'tradePrice')
-        amount = self.safe_float(trade, 'tradeQuantity')
-        type = self.safe_string(trade, 'tradeType')
-        cost = None
-        if price is not None:
-            if amount is not None:
-                cost = price * amount
+        timestamp = self.safe_integer_2(trade, 'create_time', 'trade_time')
         symbol = None
         if market is not None:
             symbol = market['symbol']
+        # take either of orderid or orderId
+        id = self.safe_string(trade, 'order_id')
+        side = self.safe_string(trade, 'trade_type')
+        isTaker = self.safe_value(trade, 'is_taker')
+        price = self.safe_float_2(trade, 'price', 'trade_price')
+        amount = self.safe_float_2(trade, 'quantity', 'trade_quantity')
+        cost = None
+        if price is not None and amount is not None:
+            cost = price * amount
+        feeCost = self.safe_float(trade, 'fee')
+        feeCurrency = self.safe_string(trade, 'fee_currency')
+        fee = None
+        if (feeCost is not None) and (feeCurrency is not None):
+            fee = {
+                'cost': feeCost,
+                'currency': feeCurrency,
+                'rate': None,
+            }
         return {
-            'id': None,
             'info': trade,
+            'id': id,
             'timestamp': timestamp,
             'datetime': self.iso8601(timestamp),
             'symbol': symbol,
-            'order': None,
-            'type': None,
-            'side': type == 'buy' if '1' else 'sell',
-            'takerOrMaker': None,
+            'order': id,
+            'type': 'limit',
+            'side': side == 'buy' if 'BID' else 'sell',
+            'takerOrMaker': 'taker' if isTaker else 'maker',
             'price': price,
             'amount': amount,
             'cost': cost,
-            'fee': None,
+            'fee': fee,
         }
 
     def fetch_trades(self, symbol, since=None, limit=None, params={}):
         self.load_markets()
         market = self.market(symbol)
         request = {
-            'market': self.market_id(symbol),
+            'symbol': self.market_id(symbol),
         }
-        response = self.publicGetHistory(self.extend(request, params))
-        return self.parse_trades(response['data'], market, since, limit)
-
-    def fetch_orders(self, symbol=None, since=None, limit=None, params={}):
-        request = {
-            'api_key': self.apiKey,
-            'req_time': self.milliseconds(),
-        }
-        response = self.privateGetCurrentOrders(self.extend(request, params))
-        return self.parse_orders(response['data'], None, since, limit)
-
-    def fetch_order(self, id, symbol=None, params={}):
-        self.load_markets()
-        request = {
-            'trade_no': id,
-            'market': self.market_id(symbol),
-            'api_key': self.apiKey,
-            'req_time': self.milliseconds(),
-        }
-        response = self.privateGetOrder(self.extend(request, params))
-        return self.parse_order(response['data'])
+        # max limit = 1000
+        if limit is not None:
+            request['limit'] = limit
+        response = self.publicGetMarketDeals(self.extend(request, params))
+        data = self.safe_value(response, 'data')
+        return self.parse_trades(data, market, since, limit)
 
     def parse_order_side(self, side):
         sides = {
-            '1': 'buy',
-            '2': 'sell',
+            'BID': 'buy',
+            'ASK': 'sell',
         }
         return self.safe_string(sides, side, side)
 
     def parse_order_status(self, status):
         statuses = {
-            '1': 'open',
-            '2': 'closed',
-            '3': 'open',  # partial closed
-            '4': 'canceled',  # partial closed
-            '5': 'canceled',  # partial canceled
+            'NEW': 'open',
+            'FILLED': 'closed',
+            'PARTIALLY_FILLED': 'open',  # partial closed
+            'CANCELED': 'canceled',
+            'PARTIALLY_CANCELED': 'canceled',  # partial canceled
         }
         return self.safe_string(statuses, status, status)
+
+    def parse_order_type(self, type):
+    #     types = {
+    #         'LIMIT_ORDER': 'limit',
+    #         'POST_ONLY': 'limit',
+    #     }
+    #     return self.safe_string(types, type, type)
 
     def parse_order(self, order, market=None):
         # Different API endpoints returns order info in different format...
         # with different fields filled.
         id = self.safe_string(order, 'id')
-        if id is None:
-            id = self.safe_string(order, 'data')
+        timestamp = self.safe_integer(order, 'create_time')
+        status = self.parse_order_status(self.safe_string(order, 'state'))
         symbol = None
-        marketId = self.safe_string(order, 'market')
+        marketId = self.safe_string(order, 'symbol')
         if marketId in self.markets_by_id:
             market = self.markets_by_id[marketId]
         if market is not None:
             symbol = market['symbol']
-        dateStr = self.safe_string(order, 'createTime')
-        # XXX: MXC returns order creation times in GMT+8 timezone with out specifying it
-        #  hence appending ' GMT+8' to it so we can get the correct value
-        # XXX: Also MXC api does not return actual matched prices and costs/fees
-        timestamp = None
-        if dateStr is not None:
-            timestamp = self.parse_date(dateStr + '  GMT+8')
-        status = self.parse_order_status(self.safe_string(order, 'status'))
         side = self.parse_order_side(self.safe_string(order, 'type'))
         price = self.safe_float(order, 'price')
-        amount = self.safe_float(order, 'totalQuantity')
-        if amount is None:
-            amount = self.safe_float(order, 'initialAmount')
-        filled = self.safe_float(order, 'tradedQuantity')
-        average = None
+        amount = self.safe_float(order, 'quantity')
+        filled = self.safe_float(order, 'deal_quantity')
+        cost = self.safe_float(order, 'deal_amount')
         remaining = None
-        if (filled is not None) and (amount is not None):
-            remaining = amount - filled
+        average = None
+        if filled is not None:
+            if amount is not None:
+                remaining = amount - filled
+            if (cost is not None) and (filled > 0):
+                average = cost / filled
         return {
             'id': id,
             'datetime': self.iso8601(timestamp),
             'timestamp': timestamp,
+            'lastTradeTimestamp': None,
             'status': status,
             'symbol': symbol,
             'type': 'limit',
             'side': side,
             'price': price,
-            'cost': None,
             'amount': amount,
             'filled': filled,
             'remaining': remaining,
+            'cost': cost,
             'average': average,
             'trades': None,
             'fee': {
@@ -443,61 +436,138 @@ class mxc(Exchange):
             'info': order,
         }
 
+    def fetch_order(self, id, symbol=None, params={}):
+        self.load_markets()
+        request = {
+            'order_ids': id,
+        }
+        response = self.privateGetOrderQuery(self.extend(request, params))
+        data = self.safe_value(response, 'data', [])
+        return self.parse_order(data[0])
+
+    def fetch_orders(self, symbol=None, since=None, limit=None, params={}):
+        self.load_markets()
+        request = {
+            'symbol': self.market_id(symbol),
+            'start_time': self.seconds(),
+        }
+        # max limit = 1000
+        if limit is not None:
+            request['limit'] = limit
+        if since is not None:
+            request['start_time'] = int(since / 1000)
+        response = self.privateGetOrderList(self.extend(request, params))
+        data = self.safe_value(response, 'data')
+        return self.parse_orders(data, None, since, limit)
+
+    def fetch_open_orders(self, symbol=None, since=None, limit=None, params={}):
+        request = {
+            'states': 'NEW,PARTIALLY_FILLED',
+        }
+        return self.fetch_orders(symbol, since, limit, self.extend(request, params))
+
+    def fetch_closed_orders(self, symbol=None, since=None, limit=None, params={}):
+        request = {
+            'states': 'FILLED',
+        }
+        return self.fetch_orders(symbol, since, limit, self.extend(request, params))
+
     def create_order(self, symbol, type, side, amount, price=None, params={}):
         if type == 'market':
             raise ExchangeError(self.id + ' allows limit orders only')
         self.load_markets()
-        market = self.market(symbol)
         request = {
-            'api_key': self.apiKey,
-            'req_time': self.milliseconds(),
-            'market': self.market_id(symbol),
+            'symbol': self.market_id(symbol),
             'price': price,
             'quantity': amount,
-            'trade_type': '1' if (side == 'buy') else '2',
+            'trade_type': 'BID' if (side == 'buy') else 'ASK',
         }
-        response = self.privatePostOrder(self.extend(request, params))
-        return self.parse_order(self.extend({
-            'status': 'open',
-            'type': side,
-            'initialAmount': amount,
-        }, response), market)
+        if type == 'limit':
+            request.order_type = 'LIMIT_ORDER'
+        response = self.privatePostOrderPlace(self.extend(request, params))
+        id = self.safe_string(response, 'data')
+        timestamp = self.milliseconds()
+        order = {
+            'symbol': self.market_id(symbol),
+            'id': id,
+            'price': price,
+            'quantity': amount,
+            'create_time': timestamp,
+            'state': 'NEW',
+            'type': request.trade_type,
+        }
+        return self.parse_order(order)
 
     def cancel_order(self, id, symbol=None, params={}):
-        if symbol is None:
-            raise ArgumentsRequired(self.id + ' cancelOrder requires symbol argument')
         self.load_markets()
         request = {
-            'api_key': self.apiKey,
-            'req_time': self.milliseconds(),
-            'market': self.market_id(symbol),
-            'trade_no': id,
+            'order_ids': id,
         }
-        return self.privateDeleteOrder(self.extend(request, params))
+        response = self.privateDeleteOrderCancel(self.extend(request, params))
+        data = self.safe_value(response, 'data')
+        order = {
+            'id': id,
+            'state': 'CANCELED',
+            'info': data,
+        }
+        return self.parse_order(order)
+
+    def fetch_my_trades(self, symbol=None, since=None, limit=None, params={}):
+        self.load_markets()
+        market = self.market(symbol)
+        request = {
+            'symbol': self.market_id(symbol),
+        }
+        # max limit = 1000
+        if limit is not None:
+            request['limit'] = limit
+        if since is not None:
+            request['start_time'] = int(since / 1000)
+        response = self.privateGetOrderDeals(self.extend(request, params))
+        data = self.safe_value(response, 'data')
+        return self.parse_trades(data, market, since, limit)
 
     def sign(self, path, api='public', method='GET', params={}, headers=None, body=None):
-        url = self.urls['api'][api] + self.implode_params(path, params)
-        query = self.omit(params, self.extract_params(path))
-        url += '?api_key=' + self.apiKey
+        path1 = `/open/api/${self.version}/`
+        origin = self.urls['api']
+        url = self.implode_params(origin, self.extend({'hostname': self.hostname}, params)) + path1 + self.implode_params(path, params)
+        query = self.omit(params, self.extract_params(path), self.extract_params(origin))
+        request = {
+            'api_key': self.apiKey,
+        }
         if api == 'public':
-            if query:
-                url += '&' + self.urlencode(query)
+            request = self.extend(request, query)
+            if request:
+                url += '?' + self.urlencode(request)
         else:
             self.check_required_credentials()
-            auth = self.rawencode(self.keysort(query))
-            signature = self.hash(self.encode(auth + '&api_secret=' + self.secret), 'md5')
+            request.req_time = self.seconds()
+            if 'recv_window' in params:
+                request.recv_window = params.recv_window
+            if method != 'POST':
+                request = self.extend(request, query)
+            request = self.keysort(request)
+            auth = self.urlencode(request)
+            signature = self.hmac(self.encode('\n'.join([method, `${path1}${path}`, auth])), self.encode(self.secret), 'sha256')
             suffix = 'sign=' + signature
-            url += '&' + auth + '&' + suffix
+            url += '?' + auth + '&' + suffix
+            if method == 'POST':
+                body = self.json(query)
+                headers = {
+                    'Content-Type': 'application/json',
+                }
+            else:
+                headers = {
+                    'Content-Type': 'application/x-www-form-urlencoded',
+                }
         return {'url': url, 'method': method, 'body': body, 'headers': headers}
 
     def handle_errors(self, code, reason, url, method, headers, body, response, requestHeaders, requestBody):
         if response is None:
             return
-        resultString = self.safe_string(response, 'result', '')
-        if resultString != 'false':
-            return
-        errorCode = self.safe_string(response, 'code')
-        message = self.safe_string(response, 'message', body)
-        if errorCode is not None:
-            feedback = self.safe_string(self.errorCodeNames, errorCode, message)
-            self.throw_exactly_matched_exception(self.exceptions['exact'], errorCode, feedback)
+        if code >= 400:
+            errorCode = self.safe_string(response, 'code')
+            message = self.safe_string(response, 'msg', body)
+            if errorCode is not None:
+                feedback = self.safe_string(self.errorCodeNames, errorCode, message)
+                self.throw_exactly_matched_exception(self.exceptions['exact'], errorCode, feedback)

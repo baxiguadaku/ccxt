@@ -144,9 +144,8 @@ module.exports = class mxc extends Exchange {
             const taker = this.safeFloat (market, 'taker_fee_rate');
             const minAmount = this.safeFloat (market, 'min_amount');
             const maxAmount = this.safeFloat (market, 'max_amount');
+            const minQuantity = Math.pow (10, -this.safeInteger (market, 'quantity_scale'));
             const minPrice = Math.pow (10, -this.safeInteger (market, 'price_scale'));
-            const defaultCost = minAmount * minPrice;
-            const minCost = this.safeFloat (this.options['limits']['cost']['min'], quote, defaultCost);
             const state = this.safeString (market, 'state');
             const active = state === 'ENABLED';
             result.push ({
@@ -162,16 +161,16 @@ module.exports = class mxc extends Exchange {
                 'precision': precision,
                 'limits': {
                     'amount': {
-                        'min': minAmount,
-                        'max': maxAmount,
+                        'min': minQuantity,
+                        'max': undefined,
                     },
                     'price': {
                         'min': minPrice,
                         'max': undefined,
                     },
                     'cost': {
-                        'min': minCost,
-                        'max': undefined,
+                        'min': minAmount,
+                        'max': maxAmount,
                     },
                 },
                 'info': market,
