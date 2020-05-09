@@ -143,9 +143,8 @@ class mxc(Exchange):
             taker = self.safe_float(market, 'taker_fee_rate')
             minAmount = self.safe_float(market, 'min_amount')
             maxAmount = self.safe_float(market, 'max_amount')
+            minQuantity = math.pow(10, -self.safe_integer(market, 'quantity_scale'))
             minPrice = math.pow(10, -self.safe_integer(market, 'price_scale'))
-            defaultCost = minAmount * minPrice
-            minCost = self.safe_float(self.options['limits']['cost']['min'], quote, defaultCost)
             state = self.safe_string(market, 'state')
             active = state == 'ENABLED'
             result.append({
@@ -161,16 +160,16 @@ class mxc(Exchange):
                 'precision': precision,
                 'limits': {
                     'amount': {
-                        'min': minAmount,
-                        'max': maxAmount,
+                        'min': minQuantity,
+                        'max': None,
                     },
                     'price': {
                         'min': minPrice,
                         'max': None,
                     },
                     'cost': {
-                        'min': minCost,
-                        'max': None,
+                        'min': minAmount,
+                        'max': maxAmount,
                     },
                 },
                 'info': market,

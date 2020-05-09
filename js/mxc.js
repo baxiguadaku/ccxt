@@ -3,7 +3,7 @@
 // ---------------------------------------------------------------------------
 
 const Exchange = require ('./base/Exchange');
-const { ExchangeError } = require ('./base/errors');
+const { ExchangeError, InvalidOrder } = require ('./base/errors');
 
 // ---------------------------------------------------------------------------
 
@@ -15,7 +15,7 @@ module.exports = class mxc extends Exchange {
             'countries': [ 'CN' ],
             'version': 'v2',
             'rateLimit': 1000,
-            'hostname': 'www.mxc.com',
+            'hostname': 'www.mxc.ai',
             'has': {
                 'CORS': false,
                 'createMarketOrder': false,
@@ -94,9 +94,9 @@ module.exports = class mxc extends Exchange {
                 },
             },
             'exceptions': {
-            },
-            // https://gate.io/api2#errCode
-            'errorCodeNames': {
+                'exact': {
+                    '30002': InvalidOrder,
+                },
             },
             'options': {
                 'limits': {
@@ -137,8 +137,9 @@ module.exports = class mxc extends Exchange {
             const quote = this.safeCurrencyCode (quoteId);
             const symbol = base + '/' + quote;
             const precision = {
-                'amount': 8,
+                'amount': this.safeInteger (market, 'quantity_scale'),
                 'price': this.safeInteger (market, 'price_scale'),
+                'cost': 8,
             };
             const maker = this.safeFloat (market, 'maker_fee_rate');
             const taker = this.safeFloat (market, 'taker_fee_rate');
@@ -620,7 +621,7 @@ module.exports = class mxc extends Exchange {
             const errorCode = this.safeString (response, 'code');
             const message = this.safeString (response, 'msg', body);
             if (errorCode !== undefined) {
-                const feedback = this.safeString (this.errorCodeNames, errorCode, message);
+                const feedback = this.id + ' ' + message;
                 this.throwExactlyMatchedException (this.exceptions['exact'], errorCode, feedback);
             }
         }

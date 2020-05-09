@@ -145,9 +145,8 @@ class mxc extends Exchange {
             $taker = $this->safe_float($market, 'taker_fee_rate');
             $minAmount = $this->safe_float($market, 'min_amount');
             $maxAmount = $this->safe_float($market, 'max_amount');
+            $minQuantity = pow(10, -$this->safe_integer($market, 'quantity_scale'));
             $minPrice = pow(10, -$this->safe_integer($market, 'price_scale'));
-            $defaultCost = $minAmount * $minPrice;
-            $minCost = $this->safe_float($this->options['limits']['cost']['min'], $quote, $defaultCost);
             $state = $this->safe_string($market, 'state');
             $active = $state === 'ENABLED';
             $result[] = array(
@@ -163,16 +162,16 @@ class mxc extends Exchange {
                 'precision' => $precision,
                 'limits' => array(
                     'amount' => array(
-                        'min' => $minAmount,
-                        'max' => $maxAmount,
+                        'min' => $minQuantity,
+                        'max' => null,
                     ),
                     'price' => array(
                         'min' => $minPrice,
                         'max' => null,
                     ),
                     'cost' => array(
-                        'min' => $minCost,
-                        'max' => null,
+                        'min' => $minAmount,
+                        'max' => $maxAmount,
                     ),
                 ),
                 'info' => $market,

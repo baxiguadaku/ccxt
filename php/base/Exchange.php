@@ -199,6 +199,7 @@ class Exchange {
         'tidebit',
         'tidex',
         'timex',
+        'topq',
         'upbit',
         'vaultoro',
         'vbtc',
