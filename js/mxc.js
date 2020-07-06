@@ -16,6 +16,7 @@ module.exports = class mxc extends Exchange {
             'version': 'v2',
             'rateLimit': 1000,
             'hostname': 'www.mxc.ai',
+            // 'hostname': 'mapi.mxck.top', // test
             'has': {
                 'CORS': false,
                 'createMarketOrder': false,
@@ -52,6 +53,7 @@ module.exports = class mxc extends Exchange {
             'urls': {
                 'logo': '',
                 'api': 'https://{hostname}',
+                // 'api': 'http://{hostname}', // test
                 'www': 'https://mxc.com/',
                 'doc': 'https://mxcdevelop.github.io/APIDoc/',
                 'fees': [
