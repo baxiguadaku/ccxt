@@ -15,7 +15,7 @@ module.exports = class mxc extends Exchange {
             'countries': [ 'CN' ],
             'version': 'v2',
             'rateLimit': 1000,
-            'hostname': 'www.mxc.ai',
+            'hostname': 'www.mxc.com',
             'has': {
                 'CORS': false,
                 'createMarketOrder': false,
