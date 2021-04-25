@@ -14,9 +14,8 @@ module.exports = class mxc extends Exchange {
             'name': 'MXC',
             'countries': [ 'CN' ],
             'version': 'v2',
-            'rateLimit': 1000,
+            'rateLimit': 10000,
             'hostname': 'www.mxc.com',
-            // 'hostname': 'mapi.mxck.top', // test
             'has': {
                 'CORS': false,
                 'createMarketOrder': false,
@@ -53,7 +52,6 @@ module.exports = class mxc extends Exchange {
             'urls': {
                 'logo': '',
                 'api': 'https://{hostname}',
-                // 'api': 'http://{hostname}', // test
                 'www': 'https://mxc.com/',
                 'doc': 'https://mxcdevelop.github.io/APIDoc/',
                 'fees': [
@@ -513,9 +511,9 @@ module.exports = class mxc extends Exchange {
     }
 
     async createOrder (symbol, type, side, amount, price = undefined, params = {}) {
-        if (type === 'market') {
-            throw new ExchangeError (this.id + ' allows limit orders only');
-        }
+        // if (type === 'market') {
+        //     throw new ExchangeError (this.id + ' allows limit orders only');
+        // }
         await this.loadMarkets ();
         const request = {
             'symbol': this.marketId (symbol),
@@ -525,6 +523,9 @@ module.exports = class mxc extends Exchange {
         };
         if (type === 'limit') {
             request.order_type = 'LIMIT_ORDER';
+        }
+        if (type === 'market') {
+            request.order_type = 'MARKET_ORDER';
         }
         const response = await this.privatePostOrderPlace (this.extend (request, params));
         const id = this.safeString (response, 'data');
